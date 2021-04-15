@@ -49,7 +49,8 @@ if __name__ == "__main__":
         REPLAY_INITIAL=100000,
         SAVE_FREQUENCY=100000,
         GIF_FREQUENCY=100000,
-        TOTAL_GRAD_STEPS=1000000
+        TOTAL_GRAD_STEPS=1000000,
+        MULTI_AGENT=True
     )
     wandb.init(project='RoboCIn-RL', entity='goncamateus',
                name=hp.EXP_NAME, config=hp.to_dict())
@@ -125,17 +126,18 @@ if __name__ == "__main__":
                     ep_infos.append(logs)
                     n_episodes += 1
                 else:
-                    if safe_exp.last_state is not None:
-                        last_state = safe_exp.last_state
-                    else:
-                        last_state = safe_exp.state
-                    buffer.add(
-                        obs=safe_exp.state,
-                        next_obs=last_state,
-                        action=safe_exp.action,
-                        reward=safe_exp.reward,
-                        done=False if safe_exp.last_state is not None else True
-                    )
+                    for exp in safe_exp:
+                        if exp.last_state is not None:
+                            last_state = exp.last_state
+                        else:
+                            last_state = exp.state
+                        buffer.add(
+                            obs=exp.state,
+                            next_obs=last_state,
+                            action=exp.action,
+                            reward=exp.reward,
+                            done=False if exp.last_state is not None else True
+                        )
                     new_samples += 1
             n_samples += new_samples
             sample_time = time.perf_counter()
@@ -195,7 +197,13 @@ if __name__ == "__main__":
 
             if ep_infos:
                 for key in ep_infos[0].keys():
-                    metrics[key] = np.mean([info[key] for info in ep_infos])
+                    if isinstance(ep_infos[0][key], dict):
+                        for i in range(hp.N_AGENTS):
+                            for inner_key in ep_infos[0][key].keys():
+                                metrics[f"ep_info/agent_{i}/{inner_key}"] = np.mean(
+                                    [info[key][inner_key] for info in ep_infos])
+                    else:
+                        metrics[key] = np.mean([info[key] for info in ep_infos])
 
             # Log metrics
             wandb.log(metrics)

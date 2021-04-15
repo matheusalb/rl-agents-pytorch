@@ -9,7 +9,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from agents.utils import HyperParameters, NStepTracer, generate_gif, unpack_batch
+from agents.utils import HyperParameters, NStepTracer, generate_gif, unpack_batch, ExperienceFirstLast
 
 
 @dataclass
@@ -30,7 +30,10 @@ def data_func(
     hp
 ):
     env = gym.make(hp.ENV_NAME)
-    tracer = NStepTracer(n=hp.REWARD_STEPS, gamma=hp.GAMMA)
+    if hp.MULTI_AGENT:
+        tracer = [NStepTracer(n=hp.REWARD_STEPS, gamma=hp.GAMMA)]*hp.N_AGENTS
+    else:
+        tracer = NStepTracer(n=hp.REWARD_STEPS, gamma=hp.GAMMA)
 
     with torch.no_grad():
         while not finish_event_m.is_set():
@@ -43,27 +46,47 @@ def data_func(
             if gif_idx != -1:
                 path = os.path.join(hp.GIF_PATH, f"{gif_idx:09d}.gif")
                 generate_gif(env=env, filepath=path,
-                             pi=copy.deepcopy(pi), device=device)
+                             pi=copy.deepcopy(pi), hp=hp)
 
             done = False
             s = env.reset()
-            tracer.reset()
+            if hp.MULTI_AGENT:
+                [tracer[i].reset() for i in range(hp.N_AGENTS)]
             info = {}
             ep_steps = 0
-            ep_rw = 0
+            if hp.MULTI_AGENT:
+                ep_rw = [0]*hp.N_AGENTS
+            else:
+                ep_rw = 0
             st_time = time.perf_counter()
             for i in range(hp.MAX_EPISODE_STEPS):
                 # Step the environment
                 s_v = torch.Tensor(s).to(device)
                 a = pi.get_action(s_v)
                 s_next, r, done, info = env.step(a)
-                ep_steps += 1
-                ep_rw += r
 
+                ep_steps += 1
+                if hp.MULTI_AGENT:
+                    for i in range(hp.N_AGENTS):
+                        ep_rw[i] += r[f'robot_{i}']
+                else:
+                    ep_rw += r
                 # Trace NStep rewards and add to mp queue
-                tracer.add(s, a, r, done)
-                while tracer:
-                    queue_m.put(tracer.pop())
+                if hp.MULTI_AGENT: 
+                    exp = list()
+                    for i in range(hp.N_AGENTS):
+                        kwargs = {
+                            'state': s[i],
+                            'action': a[i],
+                            'reward': r[f'robot_{i}'],
+                            'last_state': s_next[i]
+                        }
+                        exp.append(ExperienceFirstLast(**kwargs))
+                    queue_m.put(exp)
+                else:
+                    tracer.add(s, a, r, done)
+                    while tracer:
+                        queue_m.put(tracer.pop())
 
                 if done:
                     break
@@ -80,10 +103,11 @@ def data_func(
 def loss_sac(alpha, gamma, batch, crt_net, act_net,
              tgt_crt_net, device):
 
-    state_batch, action_batch, reward_batch,\
-        mask_batch, next_state_batch = unpack_batch(batch, device)
-
-    reward_batch = reward_batch.unsqueeze_(1)
+    state_batch = batch.observations
+    action_batch = batch.actions
+    reward_batch = batch.rewards
+    mask_batch = batch.dones.bool()
+    next_state_batch = batch.next_observations
 
     with torch.no_grad():
         next_state_action, next_state_log_pi, _ = act_net.sample(

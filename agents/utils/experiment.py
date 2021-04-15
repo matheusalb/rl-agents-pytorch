@@ -22,26 +22,38 @@ class HyperParameters:
     BATCH_SIZE: int
     GAMMA: float  # Reward Decay
     REWARD_STEPS: float  # For N-Steps Tracing
-    GIF_FREQUENCY: int= None
+    GIF_FREQUENCY: int = None
     MAX_EPISODE_STEPS: int = None
-    N_OBS: int= None
-    N_ACTS: int= None
+    N_OBS: int = None
+    N_ACTS: int = None
+    N_AGENTS: int = 1
     SAVE_PATH: str = None
     DEVICE: str = None
     TOTAL_GRAD_STEPS: int = None
+    MULTI_AGENT: bool = False
 
     def to_dict(self):
         return self.__dict__
-    
+
     def __post_init__(self):
         env = gym.make(self.ENV_NAME)
-        self.N_OBS, self.N_ACTS, self.MAX_EPISODE_STEPS = env.observation_space.shape[0], env.action_space.shape[0], env.spec.max_episode_steps
-        self.SAVE_PATH = os.path.join("saves", self.ENV_NAME, self.AGENT, self.EXP_NAME)
+        self.N_OBS, self.N_ACTS, self.MAX_EPISODE_STEPS = env.observation_space.shape[
+            0], env.action_space.shape[0], env.spec.max_episode_steps
+        if self.MULTI_AGENT:
+            self.N_AGENTS = env.action_space.shape[0]
+            self.N_ACTS = env.action_space.shape[1]
+            self.N_OBS = env.observation_space.shape[1]
+        self.SAVE_PATH = os.path.join(
+            "saves", self.ENV_NAME, self.AGENT, self.EXP_NAME)
         self.CHECKPOINT_PATH = os.path.join(self.SAVE_PATH, "checkpoints")
         self.GIF_PATH = os.path.join(self.SAVE_PATH, "gifs")
         os.makedirs(self.CHECKPOINT_PATH, exist_ok=True)
         os.makedirs(self.GIF_PATH, exist_ok=True)
-        
+        self.action_space = env.action_space
+        self.observation_space = env.observation_space
+        if self.MULTI_AGENT:
+            self.action_space.shape = (env.action_space.shape[1], )
+            self.observation_space.shape = (env.observation_space.shape[1], )
 
 
 def unpack_batch(
@@ -65,6 +77,7 @@ def unpack_batch(
     last_states_v = torch.Tensor(last_states).to(device, non_blocking=True)
     dones_t = torch.BoolTensor(dones).to(device, non_blocking=True)
     return states_v, actions_v, rewards_v, dones_t, last_states_v
+
 
 def save_checkpoint(
     hp,

@@ -15,7 +15,7 @@ import torch.optim as optim
 import wandb
 from agents.ddpg import (DDPGHP, DDPGActor, DDPGCritic, TargetActor,
                          TargetCritic, data_func)
-from agents.utils import ExperienceReplayBuffer, save_checkpoint, unpack_batch
+from agents.utils import ReplayBuffer, save_checkpoint, unpack_batch, ExperienceFirstLast
 
 if __name__ == "__main__":
     mp.set_start_method('spawn')
@@ -35,7 +35,7 @@ if __name__ == "__main__":
         EXP_NAME=args.name,
         DEVICE=device,
         ENV_NAME=args.env,
-        N_ROLLOUT_PROCESSES=4,
+        N_ROLLOUT_PROCESSES=3,
         LEARNING_RATE=0.0001,
         EXP_GRAD_RATIO=10,
         BATCH_SIZE=256,
@@ -48,11 +48,12 @@ if __name__ == "__main__":
         NOISE_SIGMA_GRAD_STEPS=3000,
         REPLAY_SIZE=1000000,
         REPLAY_INITIAL=100000,
-        SAVE_FREQUENCY=0,
-        GIF_FREQUENCY=0,
-        TOTAL_GRAD_STEPS=1000000
+        SAVE_FREQUENCY=100000,
+        GIF_FREQUENCY=100000,
+        TOTAL_GRAD_STEPS=2000000
     )
-    wandb.init(project='RoboCIn-RL', name=hp.EXP_NAME, config=hp.to_dict())
+    wandb.init(project='RoboCIn-RL', entity='goncamateus',
+               name=hp.EXP_NAME, config=hp.to_dict())
     current_time = datetime.datetime.now().strftime('%b-%d_%H-%M-%S')
     tb_path = os.path.join('runs', current_time + '_'
                            + hp.ENV_NAME + '_' + hp.EXP_NAME)
@@ -88,7 +89,11 @@ if __name__ == "__main__":
     tgt_Q = TargetCritic(Q)
     pi_opt = optim.Adam(pi.parameters(), lr=hp.LEARNING_RATE)
     Q_opt = optim.Adam(Q.parameters(), lr=hp.LEARNING_RATE)
-    buffer = ExperienceReplayBuffer(buffer_size=hp.REPLAY_SIZE)
+    buffer = ReplayBuffer(buffer_size=hp.REPLAY_SIZE,
+                          observation_space=hp.observation_space,
+                          action_space=hp.action_space,
+                          device=hp.DEVICE
+                          )
     n_grads = 0
     n_samples = 0
     n_episodes = 0
@@ -116,29 +121,38 @@ if __name__ == "__main__":
                     ep_infos.append(logs)
                     n_episodes += 1
                 else:
-                    buffer.add(safe_exp)
+                    buffer.add(
+                    obs=safe_exp.state,
+                    next_obs=safe_exp.last_state if safe_exp.last_state is not None else safe_exp.state,
+                    action=safe_exp.action,
+                    reward=safe_exp.reward,
+                    done=False if safe_exp.last_state is not None else True
+                    )
                     new_samples += 1
             n_samples += new_samples
             sample_time = time.perf_counter()
 
 
             # Only start training after buffer is larger than initial value
-            if len(buffer) < hp.REPLAY_INITIAL:
+            if buffer.size() < hp.REPLAY_INITIAL:
                 continue
 
             # Sample a batch and load it as a tensor on device
             batch = buffer.sample(hp.BATCH_SIZE)
-            S_v, A_v, r_v, dones, S_next_v = unpack_batch(batch, device)
+            S_v = batch.observations
+            A_v = batch.actions
+            r_v = batch.rewards
+            dones = batch.dones
+            S_next_v = batch.next_observations
 
             # train critic
             Q_opt.zero_grad()
             Q_v = Q(S_v, A_v)  # expected Q for S,A
             A_next_v = tgt_pi(S_next_v)  # Get an Bootstrap Action for S_next
             Q_next_v = tgt_Q(S_next_v, A_next_v)  # Bootstrap Q_next
-            Q_next_v[dones] = 0.0  # No bootstrap if transition is terminal
+            Q_next_v[dones == 1.] = 0.0  # No bootstrap if transition is terminal
             # Calculate a reference Q value using the bootstrap Q
-            Q_ref_v = r_v.unsqueeze(dim=-1) + Q_next_v * \
-                (hp.GAMMA**hp.REWARD_STEPS)
+            Q_ref_v = r_v + Q_next_v * (hp.GAMMA**hp.REWARD_STEPS)
             Q_loss_v = F.mse_loss(Q_v, Q_ref_v.detach())
             Q_loss_v.backward()
             Q_opt.step()
@@ -165,7 +179,7 @@ if __name__ == "__main__":
             metrics['counters/samples'] = n_samples
             metrics['counters/grads'] = n_grads
             metrics['counters/episodes'] = n_episodes
-            metrics["counters/buffer_len"] = len(buffer)
+            metrics["counters/buffer_len"] = buffer.size()
 
             if ep_infos:
                 for key in ep_infos[0].keys():
