@@ -29,10 +29,8 @@ def data_func(
     hp
 ):
     env = gym.make(hp.ENV_NAME)
-    if hp.MULTI_AGENT:
-        tracer = [NStepTracer(n=hp.REWARD_STEPS, gamma=hp.GAMMA)]*hp.N_AGENTS
-    else:
-        tracer = NStepTracer(n=hp.REWARD_STEPS, gamma=hp.GAMMA)
+    tracer_atk = NStepTracer(n=hp.REWARD_STEPS, gamma=hp.GAMMA)
+    tracer_gk = NStepTracer(n=hp.REWARD_STEPS, gamma=hp.GAMMA)
     noise = OrnsteinUhlenbeckNoise(
         sigma=sigma_m.value,
         theta=hp.NOISE_THETA,
@@ -49,9 +47,13 @@ def data_func(
                     gif_idx = gif_req_m.value
                     gif_req_m.value = -1
             if gif_idx != -1:
-                path = os.path.join(hp.GIF_PATH, f"{gif_idx:09d}.gif")
+                path = os.path.join(hp.GIF_PATH, f"{gif_idx:09d}_atk.gif")
                 generate_gif(env=env, filepath=path,
-                             pi=copy.deepcopy(pi), hp=hp)
+                             pi=copy.deepcopy(pi['pi_atk']), hp=hp)
+                # verificar se faz diferença
+                path = os.path.join(hp.GIF_PATH, f"{gif_idx:09d}_gk.gif")
+                generate_gif(env=env, filepath=path,
+                             pi=copy.deepcopy(pi['pi_gk']), hp=hp)
 
             done = False
             s = env.reset()
@@ -63,42 +65,34 @@ def data_func(
             noise.sigma = sigma_m.value
             info = {}
             ep_steps = 0
-            if hp.MULTI_AGENT:
-                ep_rw = [0]*hp.N_AGENTS
-            else:
-                ep_rw = 0
+            ep_rw_atk = 0
+            ep_rw_gk = 0
             st_time = time.perf_counter()
             for i in range(hp.MAX_EPISODE_STEPS):
                 # Step the environment
-                s_v = torch.Tensor(s).to(device)
-                a_v = pi(s_v)
-                a = a_v.cpu().numpy()
-                a = noise(a)
-                s_next, r, done, info = env.step(a)
+                s_v_atk = torch.Tensor(s).to(device)
+                a_v_atk = pi(s_v_atk)
+                a_atk = a_v_atk.cpu().numpy()
+                # a_atk = noise(a_atk)
+
+                s_v_gk = torch.Tensor(s).to(device)
+                a_v_gk = pi(s_v_gk)
+                a_gk = a_v_gk.cpu().numpy()
+                # a_gk = noise(a_gk)
+
+                s_next, r, done, info = env.step({'action_atk': a_atk, 'action_gk': a_gk})
                 ep_steps += 1
-                if hp.MULTI_AGENT:
-                    for i in range(hp.N_AGENTS):
-                        ep_rw[i] += r[f'robot_{i}']
-                else:
-                    ep_rw += r
+                ep_rw_atk += r['reward_atk']
+                ep_rw_gk += r['reward_gk']
 
                 # Trace NStep rewards and add to mp queue
-                if hp.MULTI_AGENT: 
-                    exp = list()
-                    for i in range(hp.N_AGENTS):
-                        kwargs = {
-                            'state': s[i],
-                            'action': a[i],
-                            'reward': r[f'robot_{i}'],
-                            'last_state': s_next[i]
-                        }
-                        exp.append(ExperienceFirstLast(**kwargs))
-                    queue_m.put(exp)
-                else:
-                    tracer.add(s, a, r, done)
-                    while tracer:
-                        queue_m.put(tracer.pop())
-
+                exp_atk = ExperienceFirstLast(s['observation_atk'], a_atk, 
+                                                r['reward_atk'], s_next['observation_atk'])
+                
+                exp_gk = ExperienceFirstLast(s['observation_gk'], a_atk, 
+                                                r['reward_gk'], s_next['observation_gk'])
+                
+                queue_m.put({'exp_atk': exp_atk, 'exp_gk': exp_gk})
                 if done:
                     break
 
@@ -108,5 +102,6 @@ def data_func(
             info['fps'] = ep_steps / (time.perf_counter() - st_time)
             info['noise'] = noise.sigma
             info['ep_steps'] = ep_steps
-            info['ep_rw'] = ep_rw
+            info['ep_rw_atk'] = ep_rw_atk
+            info['ep_rw_gk'] = ep_rw_gk
             queue_m.put(info)
