@@ -206,13 +206,21 @@ if __name__ == "__main__":
             metrics["train/loss_Q_gk"] = Q_loss_v_gk.cpu().detach().numpy()
 
             # train actor - Maximize Q value received over every S
-            pi_opt.zero_grad()
-            A_cur_v = pi(S_v)
-            pi_loss_v = -Q(S_v, A_cur_v)
-            pi_loss_v = pi_loss_v.mean()
-            pi_loss_v.backward()
-            pi_opt.step()
-            metrics["train/loss_pi"] = pi_loss_v.cpu().detach().numpy()
+            pi_opt_atk.zero_grad()
+            A_cur_v_atk = pi_atk(S_v_atk)
+            pi_loss_v_atk = -Q_atk(S_v_atk, A_cur_v_atk)
+            pi_loss_v_atk = pi_loss_v_atk.mean()
+            pi_loss_v_atk.backward()
+            pi_opt_atk.step()
+            metrics["train/loss_pi_atk"] = pi_loss_v_atk.cpu().detach().numpy()
+            
+            pi_opt_gk.zero_grad()
+            A_cur_v_gk = pi(S_v_gk)
+            pi_loss_v_gk = -Q(S_v_gk, A_cur_v_gk)
+            pi_loss_v_gk = pi_loss_v_gk.mean()
+            pi_loss_v_gk.backward()
+            pi_opt_gk.step()
+            metrics["train/loss_pi_gk"] = pi_loss_v_gk.cpu().detach().numpy()
 
             # Sync target networks
             tgt_pi.sync(alpha=1 - 1e-3)
