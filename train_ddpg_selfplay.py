@@ -90,11 +90,23 @@ if __name__ == "__main__":
         data_proc_list.append(data_proc)
 
     # Training
-    tgt_pi = TargetActor(pi)
-    tgt_Q = TargetCritic(Q)
-    pi_opt = optim.Adam(pi.parameters(), lr=hp.LEARNING_RATE)
-    Q_opt = optim.Adam(Q.parameters(), lr=hp.LEARNING_RATE)
-    buffer = ReplayBuffer(buffer_size=hp.REPLAY_SIZE,
+    tgt_pi_atk = TargetActor(pi_atk)
+    tgt_Q_atk = TargetCritic(Q_atk)
+    tgt_pi_gk = TargetActor(pi_gk)
+    tgt_Q_gk = TargetCritic(Q_gk)
+    
+    pi_opt_atk = optim.Adam(pi_atk.parameters(), lr=hp.LEARNING_RATE)
+    Q_opt_atk = optim.Adam(Q_atk.parameters(), lr=hp.LEARNING_RATE)
+    pi_opt_gk = optim.Adam(pi_gk.parameters(), lr=hp.LEARNING_RATE)
+    Q_opt_gk = optim.Adam(Q_gk.parameters(), lr=hp.LEARNING_RATE)
+
+    buffer_atk = ReplayBuffer(buffer_size=hp.REPLAY_SIZE,
+                          observation_space=hp.observation_space,
+                          action_space=hp.action_space,
+                          device=hp.DEVICE
+                          )
+    
+    buffer_gk = ReplayBuffer(buffer_size=hp.REPLAY_SIZE,
                           observation_space=hp.observation_space,
                           action_space=hp.action_space,
                           device=hp.DEVICE
@@ -102,7 +114,8 @@ if __name__ == "__main__":
     n_grads = 0
     n_samples = 0
     n_episodes = 0
-    best_reward = None
+    best_reward_atk = None
+    best_reward_gk = None
     last_gif = None
 
     try:
@@ -120,18 +133,28 @@ if __name__ == "__main__":
                 del(exp)
 
                 # Dict is returned with end of episode info
-                if isinstance(safe_exp, dict):
+                if not safe_exp.has_key('exp_atk'):
                     logs = {"ep_info/"+key: value for key,
                             value in safe_exp.items() if 'truncated' not in key}
                     ep_infos.append(logs)
                     n_episodes += 1
                 else:
-                    buffer.add(
-                    obs=safe_exp.state,
-                    next_obs=safe_exp.last_state if safe_exp.last_state is not None else safe_exp.state,
-                    action=safe_exp.action,
-                    reward=safe_exp.reward,
-                    done=False if safe_exp.last_state is not None else True
+                    buffer_atk.add(
+                    obs=safe_exp['exp_atk'].state,
+                    next_obs=safe_exp['exp_atk'].last_state if safe_exp['exp_atk'].last_state is not None 
+                            else safe_exp['exp_atk'].state,
+                    action=safe_exp['exp_atk'].action,
+                    reward=safe_exp['exp_atk'].reward,
+                    done=False if safe_exp['exp_atk'].last_state is not None else True
+                    )
+                    
+                    buffer_gk.add(
+                    obs=safe_exp['exp_gk'].state,
+                    next_obs=safe_exp['exp_gk'].last_state if safe_exp['exp_gk'].last_state is not None 
+                            else safe_exp['exp_gk'].state,
+                    action=safe_exp['exp_gk'].action,
+                    reward=safe_exp['exp_gk'].reward,
+                    done=False if safe_exp['exp_gk'].last_state is not None else True
                     )
                     new_samples += 1
             n_samples += new_samples
@@ -139,29 +162,48 @@ if __name__ == "__main__":
 
 
             # Only start training after buffer is larger than initial value
-            if buffer.size() < hp.REPLAY_INITIAL:
+            if buffer_atk.size() < hp.REPLAY_INITIAL or buffer_gk.size() < hp.REPLAY_INITIAL:
                 continue
 
             # Sample a batch and load it as a tensor on device
-            batch = buffer.sample(hp.BATCH_SIZE)
-            S_v = batch.observations
-            A_v = batch.actions
-            r_v = batch.rewards
-            dones = batch.dones
-            S_next_v = batch.next_observations
+            batch_atk = buffer_atk.sample(hp.BATCH_SIZE)
+            S_v_atk = batch_atk.observations
+            A_v_atk = batch_atk.actions
+            r_v_atk = batch_atk.rewards
+            dones_atk = batch_atk.dones
+            S_next_v_atk = batch_atk.next_observations
+            
+            batch_gk = buffer_gk.sample(hp.BATCH_SIZE)
+            S_v_gk = batch_gk.observations
+            A_v_gk = batch_gk.actions
+            r_v_gk = batch_gk.rewards
+            dones_gk = batch_gk.dones
+            S_next_v_gk = batch_gk.next_observations
 
             # train critic
-            Q_opt.zero_grad()
-            Q_v = Q(S_v, A_v)  # expected Q for S,A
-            A_next_v = tgt_pi(S_next_v)  # Get an Bootstrap Action for S_next
-            Q_next_v = tgt_Q(S_next_v, A_next_v)  # Bootstrap Q_next
-            Q_next_v[dones == 1.] = 0.0  # No bootstrap if transition is terminal
-            # Calculate a reference Q value using the bootstrap Q
-            Q_ref_v = r_v + Q_next_v * (hp.GAMMA**hp.REWARD_STEPS)
-            Q_loss_v = F.mse_loss(Q_v, Q_ref_v.detach())
-            Q_loss_v.backward()
-            Q_opt.step()
-            metrics["train/loss_Q"] = Q_loss_v.cpu().detach().numpy()
+            Q_opt_atk.zero_grad()
+            Q_v_atk = Q_atk(S_v_atk, A_v_atk)  # expected Q for S,A
+            A_next_v_atk = tgt_pi_atk(S_next_v_atk)  # Get an Bootstrap Action for S_next
+            Q_next_v_atk = tgt_Q_atk(S_next_v_atk, A_next_v_atk)  # Bootstrap Q_next
+            Q_next_v_atk[dones_atk == 1.] = 0.0  # No bootstrap if transition is terminal
+            # Calculate_atk a reference Q value using the bootstrap Q
+            Q_ref_v_atk = r_v_atk + Q_next_v_atk * (hp.GAMMA**hp.REWARD_STEPS)
+            Q_loss_v_atk = F.mse_loss(Q_v_atk, Q_ref_v_atk.detach())
+            Q_loss_v_atk.backward()
+            Q_opt_atk.step()
+            metrics["train/loss_Q_atk"] = Q_loss_v_atk.cpu().detach().numpy()
+    
+            Q_opt_gk.zero_grad()
+            Q_v_gk = Q_gk(S_v_gk, A_v_gk)  # expected Q for S,A
+            A_next_v_gk = tgt_pi_gk(S_next_v_gk)  # Get an Bootstrap Action for S_next
+            Q_next_v_gk = tgt_Q_gk(S_next_v_gk, A_next_v_gk)  # Bootstrap Q_next
+            Q_next_v_gk[dones == 1.] = 0.0  # No bootstrap if transition is terminal
+            # Calculate_gk a reference Q value using the bootstrap Q
+            Q_ref_v_gk = r_v_gk + Q_next_v_gk * (hp.GAMMA**hp.REWARD_STEPS)
+            Q_loss_v_gk = F.mse_loss(Q_v_gk, Q_ref_v_gk.detach())
+            Q_loss_v_gk.backward()
+            Q_opt_gk.step()
+            metrics["train/loss_Q_gk"] = Q_loss_v_gk.cpu().detach().numpy()
 
             # train actor - Maximize Q value received over every S
             pi_opt.zero_grad()
