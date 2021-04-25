@@ -223,8 +223,11 @@ if __name__ == "__main__":
             metrics["train/loss_pi_gk"] = pi_loss_v_gk.cpu().detach().numpy()
 
             # Sync target networks
-            tgt_pi.sync(alpha=1 - 1e-3)
-            tgt_Q.sync(alpha=1 - 1e-3)
+            tgt_pi_atk.sync(alpha=1 - 1e-3)
+            tgt_Q_atk.sync(alpha=1 - 1e-3)
+            
+            tgt_pi_gk.sync(alpha=1 - 1e-3)
+            tgt_Q_gk.sync(alpha=1 - 1e-3)
 
             n_grads += 1
             grad_time = time.perf_counter()
