@@ -58,10 +58,8 @@ def data_func(
             done = False
             s = env.reset()
             noise.reset()
-            if hp.MULTI_AGENT:
-                [tracer[i].reset() for i in range(hp.N_AGENTS)]
-            else:
-                tracer.reset()
+            tracer_atk.reset
+            tracer_gk.reset
             noise.sigma = sigma_m.value
             info = {}
             ep_steps = 0
@@ -70,13 +68,13 @@ def data_func(
             st_time = time.perf_counter()
             for i in range(hp.MAX_EPISODE_STEPS):
                 # Step the environment
-                s_v_atk = torch.Tensor(s).to(device)
-                a_v_atk = pi(s_v_atk)
+                s_v_atk = torch.Tensor(s['observation_atk']).to(device)
+                a_v_atk = pi['pi_atk'](s_v_atk)
                 a_atk = a_v_atk.cpu().numpy()
                 # a_atk = noise(a_atk)
 
-                s_v_gk = torch.Tensor(s).to(device)
-                a_v_gk = pi(s_v_gk)
+                s_v_gk = torch.Tensor(s['observation_gk']).to(device)
+                a_v_gk = pi['pi_gk'](s_v_gk)
                 a_gk = a_v_gk.cpu().numpy()
                 # a_gk = noise(a_gk)
 
