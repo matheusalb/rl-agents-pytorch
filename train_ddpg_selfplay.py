@@ -51,8 +51,8 @@ if __name__ == "__main__":
         SAVE_FREQUENCY=100000,
         GIF_FREQUENCY=100000,
         TOTAL_GRAD_STEPS=2000000,
-        MULTI_AGENT=True,
-        N_AGENTS=2
+        MULTI_AGENT=False,
+        N_AGENTS=1
     )
     wandb.init(project='RoboCIn-RL', entity='matheusalb',
                name=hp.EXP_NAME, config=hp.to_dict())
@@ -133,7 +133,7 @@ if __name__ == "__main__":
                 del(exp)
 
                 # Dict is returned with end of episode info
-                if not safe_exp.has_key('exp_atk'):
+                if not 'exp_atk' in safe_exp:
                     logs = {"ep_info/"+key: value for key,
                             value in safe_exp.items() if 'truncated' not in key}
                     ep_infos.append(logs)
@@ -197,7 +197,7 @@ if __name__ == "__main__":
             Q_v_gk = Q_gk(S_v_gk, A_v_gk)  # expected Q for S,A
             A_next_v_gk = tgt_pi_gk(S_next_v_gk)  # Get an Bootstrap Action for S_next
             Q_next_v_gk = tgt_Q_gk(S_next_v_gk, A_next_v_gk)  # Bootstrap Q_next
-            Q_next_v_gk[dones == 1.] = 0.0  # No bootstrap if transition is terminal
+            Q_next_v_gk[dones_gk == 1.] = 0.0  # No bootstrap if transition is terminal
             # Calculate_gk a reference Q value using the bootstrap Q
             Q_ref_v_gk = r_v_gk + Q_next_v_gk * (hp.GAMMA**hp.REWARD_STEPS)
             Q_loss_v_gk = F.mse_loss(Q_v_gk, Q_ref_v_gk.detach())
@@ -215,8 +215,8 @@ if __name__ == "__main__":
             metrics["train/loss_pi_atk"] = pi_loss_v_atk.cpu().detach().numpy()
             
             pi_opt_gk.zero_grad()
-            A_cur_v_gk = pi(S_v_gk)
-            pi_loss_v_gk = -Q(S_v_gk, A_cur_v_gk)
+            A_cur_v_gk = pi_gk(S_v_gk)
+            pi_loss_v_gk = -Q_gk(S_v_gk, A_cur_v_gk)
             pi_loss_v_gk = pi_loss_v_gk.mean()
             pi_loss_v_gk.backward()
             pi_opt_gk.step()
@@ -237,7 +237,8 @@ if __name__ == "__main__":
             metrics['counters/samples'] = n_samples
             metrics['counters/grads'] = n_grads
             metrics['counters/episodes'] = n_episodes
-            metrics["counters/buffer_len"] = buffer.size()
+            metrics['counters/buffer_len_atk'] = buffer_atk.size()
+            metrics['counters/buffer_len_gk'] = buffer_gk.size()
 
             if ep_infos:
                 for key in ep_infos[0].keys():
@@ -262,10 +263,26 @@ if __name__ == "__main__":
                         'n_episodes': n_episodes,   
                         'n_grads': n_grads,
                     },
-                    pi=pi,
-                    Q=Q,
-                    pi_opt=pi_opt,
-                    Q_opt=Q_opt
+                    pi=pi_atk,
+                    Q=Q_atk,
+                    pi_opt=pi_opt_atk,
+                    Q_opt=Q_opt_atk,
+                    label="atk"
+                )
+
+                save_checkpoint(
+                    hp=hp,
+                    metrics={
+                        'noise_sigma': sigma_m.value,
+                        'n_samples': n_samples,
+                        'n_episodes': n_episodes,   
+                        'n_grads': n_grads,
+                    },
+                    pi=pi_gk,
+                    Q=Q_gk,
+                    pi_opt=pi_opt_gk,
+                    Q_opt=Q_opt_gk,
+                    label="gk"
                 )
 
             if hp.GIF_FREQUENCY and n_grads % hp.GIF_FREQUENCY == 0:
@@ -288,6 +305,7 @@ if __name__ == "__main__":
             p.join()
 
         del(exp_queue)
-        del(pi)
+        del(pi_atk)
+        del(pi_gk)
 
         finish_event.set()
