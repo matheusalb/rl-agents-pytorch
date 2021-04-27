@@ -85,7 +85,8 @@ def save_checkpoint(
     pi,
     Q,
     pi_opt,
-    Q_opt
+    Q_opt,
+    label = ""
 ):
     checkpoint = dataclasses.asdict(hp)
     checkpoint.update(metrics)
@@ -96,5 +97,5 @@ def save_checkpoint(
         "Q_opt_state_dict": Q_opt.state_dict(),
     })
     filename = os.path.join(
-        hp.CHECKPOINT_PATH, "checkpoint_{:09}.pth".format(metrics['n_grads']))
+        hp.CHECKPOINT_PATH, ("checkpoint_"+label+"{:09}.pth").format(metrics['n_grads']))
     torch.save(checkpoint, filename)
