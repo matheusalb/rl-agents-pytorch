@@ -24,9 +24,9 @@ if __name__ == "__main__":
     checkpoint_atk = torch.load(args.checkpoint_atk)
     checkpoint_gk = torch.load(args.checkpoint_gk)
 
-    env = gym.make(checkpoint['ENV_NAME'])
+    env = gym.make(checkpoint_atk['ENV_NAME'])
 
-    if checkpoint['AGENT'] == 'ddpg_async':
+    if checkpoint_atk['AGENT'] == 'ddpg_async':
         pi_atk = DDPGActor(checkpoint_atk['N_OBS'], checkpoint_atk['N_ACTS']).to(device)
         pi_gk = DDPGActor(checkpoint_gk['N_OBS'], checkpoint_gk['N_ACTS']).to(device)
     elif checkpoint['AGENT'] == 'sac_async':
@@ -52,7 +52,7 @@ if __name__ == "__main__":
         ep_rw_atk = 0
         ep_rw_gk = 0
         st_time = time.perf_counter()
-        for i in range(checkpoint['MAX_EPISODE_STEPS']):
+        for i in range(checkpoint_atk['MAX_EPISODE_STEPS']):
             # Step the environment
             s_v_atk = torch.Tensor(s['observation_atk']).to(device)
             s_v_gk = torch.Tensor(s['observation_gk']).to(device)
