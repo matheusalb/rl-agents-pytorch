@@ -4,7 +4,7 @@ import time
 import gym
 import copy
 import numpy as np
-from agents.utils import NStepTracer, OrnsteinUhlenbeckNoise, generate_gif, HyperParameters, ExperienceFirstLast
+from agents.utils import NStepTracer, OrnsteinUhlenbeckNoise, generate_gif_selfplay, HyperParameters, ExperienceFirstLast
 import os
 from dataclasses import dataclass
 
@@ -48,12 +48,8 @@ def data_func(
                     gif_req_m.value = -1
             if gif_idx != -1:
                 path = os.path.join(hp.GIF_PATH, f"{gif_idx:09d}_atk.gif")
-                generate_gif(env=env, filepath=path,
-                             pi=copy.deepcopy(pi['pi_atk']), hp=hp)
-                # verificar se faz diferença
-                path = os.path.join(hp.GIF_PATH, f"{gif_idx:09d}_gk.gif")
-                generate_gif(env=env, filepath=path,
-                             pi=copy.deepcopy(pi['pi_gk']), hp=hp)
+                generate_gif_selfplay(env=env, filepath=path,
+                             pi=copy.deepcopy(pi), hp=hp)
 
             done = False
             s = env.reset()
