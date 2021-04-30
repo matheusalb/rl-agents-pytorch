@@ -33,7 +33,7 @@ if __name__ == "__main__":
         pi_atk = GaussianPolicy(checkpoint_atk['N_OBS'], checkpoint_atk['N_ACTS'],
                             checkpoint_atk['LOG_SIG_MIN'],
                             checkpoint_atk['LOG_SIG_MAX'], checkpoint['EPSILON']).to(device)
-        pi = GaussianPolicy(checkpoint_gk['N_OBS'], checkpoint_gk['N_ACTS'],
+        pi_gk = GaussianPolicy(checkpoint_gk['N_OBS'], checkpoint_gk['N_ACTS'],
                             checkpoint_gk['LOG_SIG_MIN'],
                             checkpoint_gk['LOG_SIG_MAX'], checkpoint_gk['EPSILON']).to(device)
     else:
