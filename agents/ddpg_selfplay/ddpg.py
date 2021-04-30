@@ -83,7 +83,7 @@ def data_func(
                 exp_atk = ExperienceFirstLast(s['observation_atk'], a_atk, 
                                                 r['reward_atk'], s_next['observation_atk'])
                 
-                exp_gk = ExperienceFirstLast(s['observation_gk'], a_atk, 
+                exp_gk = ExperienceFirstLast(s['observation_gk'], a_gk, 
                                                 r['reward_gk'], s_next['observation_gk'])
                 
                 queue_m.put({'exp_atk': exp_atk, 'exp_gk': exp_gk})
