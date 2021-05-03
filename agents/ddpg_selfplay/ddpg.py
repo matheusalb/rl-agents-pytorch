@@ -54,8 +54,8 @@ def data_func(
             done = False
             s = env.reset()
             noise.reset()
-            tracer_atk.reset
-            tracer_gk.reset
+            tracer_atk.reset()
+            tracer_gk.reset()
             noise.sigma = sigma_m.value
             info = {}
             ep_steps = 0
