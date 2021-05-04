@@ -47,9 +47,9 @@ def data_func(
                     gif_idx = gif_req_m.value
                     gif_req_m.value = -1
             if gif_idx != -1:
-                path = os.path.join(hp.GIF_PATH, f"{gif_idx:09d}_atk.gif")
-                generate_gif_selfplay(env=env, filepath=path,
-                             pi=copy.deepcopy(pi), hp=hp)
+                # path = os.path.join(hp.GIF_PATH, f"{gif_idx:09d}_atk.gif")
+                # generate_gif_selfplay(env=env, filepath=path,
+                #              pi=copy.deepcopy(pi), hp=hp)
 
             done = False
             s = env.reset()
