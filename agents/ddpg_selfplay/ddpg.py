@@ -68,12 +68,12 @@ def data_func(
                 s_v_atk = torch.Tensor(s['observation_atk']).to(device)
                 a_v_atk = pi['pi_atk'](s_v_atk)
                 a_atk = a_v_atk.cpu().numpy()
-                # a_atk = noise(a_atk)
+                a_atk = noise(a_atk)
 
                 s_v_gk = torch.Tensor(s['observation_gk']).to(device)
                 a_v_gk = pi['pi_gk'](s_v_gk)
                 a_gk = a_v_gk.cpu().numpy()
-                # a_gk = noise(a_gk)
+                a_gk = noise(a_gk)
 
                 s_next, r, done, info = env.step({'action_atk': a_atk, 'action_gk': a_gk})
                 ep_steps += 1
