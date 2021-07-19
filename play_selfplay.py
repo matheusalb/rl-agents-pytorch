@@ -7,7 +7,7 @@ import numpy as np
 import rc_gym
 import torch
 
-from agents.ddpg import DDPGActor
+from agents.ddpg_selfplay import DDPGActor
 from agents.sac import GaussianPolicy
 
 if __name__ == "__main__":
