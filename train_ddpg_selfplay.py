@@ -40,7 +40,7 @@ if __name__ == "__main__":
         EXP_GRAD_RATIO=10,
         BATCH_SIZE=256,
         GAMMA=0.95,
-        REWARD_STEPS=3,
+        REWARD_STEPS=1,
         NOISE_SIGMA_INITIAL=0.8,
         NOISE_THETA=0.15,
         NOISE_SIGMA_DECAY=0.99,
