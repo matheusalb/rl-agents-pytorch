@@ -7,14 +7,13 @@ import time
 
 import gym
 import numpy as np
-import rc_gym
 import torch 
 import torch.multiprocessing as mp
 import torch.nn.functional as F
 import torch.optim as optim
 
 import wandb
-from agents.ddpg_selfplay_evaluation import (DDPGHP, DDPGActor, DDPGCritic, TargetActor,
+from agents.ddpg_3v3 import (DDPGHP, DDPGActor, DDPGCritic, TargetActor,
                          TargetCritic, data_func)
 from agents.utils import ReplayBuffer, save_checkpoint, unpack_batch, ExperienceFirstLast
 import pyvirtualdisplay
@@ -77,7 +76,7 @@ if __name__ == "__main__":
     if len(ls_atk) == 0:
         raise Exception(f"No player policy found in {args.path_atk}")
     
-    ls_gk = os.lils(args.path_gk)
+    ls_gk = os.listdir(args.path_gk)
     if len(ls_gk) == 0:
         raise Exception(f"No player policy found in {args.path_gk}")
     
@@ -91,8 +90,12 @@ if __name__ == "__main__":
 
     pi_atks = []
     for ck_atk in checkpoint_atks:
-        pi_atks.append(DDPGActor(ck_atk['N_OBS'], ck_atk['N_ACTS']).to(device))
-        pi_atks[-1].load_state_dict(ck_atk['pi_state_dict'])
+        if 'state_dict_act' in ck_atk:
+            pi_atks.append(DDPGActor(40, 2).to(device))
+            pi_atks[-1].load_state_dict(ck_atk['state_dict_act'])
+        else:
+            pi_atks.append(DDPGActor(ck_atk['N_OBS'], ck_atk['N_ACTS']).to(device))
+            pi_atks[-1].load_state_dict(ck_atk['pi_state_dict'])
         pi_atks[-1].eval()
 
     pi_gks = []
@@ -103,7 +106,7 @@ if __name__ == "__main__":
 
     # Lendo a politica a ser avaliada treinado
     if args.checkpoint is not None:
-        checkpoint = torch.load(args.checkpoint_eval)
+        checkpoint = torch.load(args.checkpoint)
         pi = DDPGActor(checkpoint['N_OBS'], checkpoint['N_ACTS']).to(device)
         Q = DDPGCritic(checkpoint['N_OBS'], checkpoint['N_ACTS']).to(device)
 
@@ -124,7 +127,7 @@ if __name__ == "__main__":
         data_proc = mp.Process(
             target=data_func,
             args=(
-                {'pi': pi, 'pi_players': [pi_atks, pi_gks]},
+                {'pi_train': pi, 'pi_players': [pi_atks, pi_gks]},
                 device,
                 exp_queue,
                 finish_event,
