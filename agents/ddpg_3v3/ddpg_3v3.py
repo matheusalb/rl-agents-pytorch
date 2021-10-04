@@ -100,23 +100,18 @@ def data_func(
             pi_allies.insert(0, pi)
 
             pi_all = pi_allies + pi_enemy
-            print(pi_all)
             for i in range(hp.MAX_EPISODE_STEPS):
                 # Step the environment
                 actions = []
 
                 for idx, st in enumerate(s):
-                    print(f'------------------->{len(st)}')
                     s_v = torch.Tensor(st).to(device)
                     if pi_all[idx] is None:
-                        print('aqqq')
                         action_space = gym.spaces.Box(low=-1, high=1,
                                            shape=(2, ), dtype=np.float32)
                         a = OrnsteinUhlenbeckAction(action_space, 0.025).sample()
                     else: 
-                        print('elsseee')
                         a_v = pi_all[idx](s_v)
-                        print('passei')
                         a = a_v.cpu().numpy()
 
                     if idx == 0:
