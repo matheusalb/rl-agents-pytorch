@@ -6,7 +6,7 @@ import copy
 import numpy as np
 import random
 import itertools
-from agents.utils import NStepTracer, OrnsteinUhlenbeckNoise, generate_gif, HyperParameters, ExperienceFirstLast
+from agents.utils import NStepTracer, OrnsteinUhlenbeckNoise, generate_gif_3v3, HyperParameters, ExperienceFirstLast
 from rsoccer_gym.Utils.Utils import OrnsteinUhlenbeckAction
 import os
 from dataclasses import dataclass
@@ -31,8 +31,8 @@ def data_func(
     gif_req_m,
     hp
 ):
-    pi_gks = pi['pi_players'][0]
-    pi_atks = pi['pi_players'][1]
+    pi_atks = pi['pi_players'][0]
+    pi_gks = pi['pi_players'][1]
     pi = pi['pi_train']
 
     env = gym.make(hp.ENV_NAME)
@@ -49,33 +49,6 @@ def data_func(
 
     with torch.no_grad():
         while not finish_event_m.is_set():
-            # Check for generate gif request
-            gif_idx = -1
-            with gif_req_m.get_lock():
-                if gif_req_m.value != -1:
-                    gif_idx = gif_req_m.value
-                    gif_req_m.value = -1
-            if gif_idx != -1:
-                path = os.path.join(hp.GIF_PATH, f"{gif_idx:09d}.gif")
-                generate_gif(env=env, filepath=path,
-                             pi=copy.deepcopy(pi), hp=hp)
-
-            done = False
-            s = env.reset()
-            noise.reset()
-            if hp.MULTI_AGENT:
-                [tracer[i].reset() for i in range(hp.N_AGENTS)]
-            else:
-                tracer.reset()
-            noise.sigma = sigma_m.value
-            info = {}
-            ep_steps = 0
-            if hp.MULTI_AGENT:
-                ep_rw = [0]*hp.N_AGENTS
-            else:
-                ep_rw = 0
-            st_time = time.perf_counter()
-
             # select enemy team
             n_enemy_gk = np.random.randint(0, 2)
             n_enemy_atks = np.random.randint(1, 4 - n_enemy_gk)
@@ -96,21 +69,54 @@ def data_func(
 
             for indx, atck_id in enumerate(ids_pi_ally_atk):
                 pi_allies[indx] = pi_atks[atck_id]
-            random.shuffle(pi_allies)
+            random.shuffle(pi_allies)           
             pi_allies.insert(0, pi)
 
             pi_all = pi_allies + pi_enemy
+            # substituindo None pela pela politica OU 
+            action_space = gym.spaces.Box(low=-1, high=1,
+                                        shape=(2, ), dtype=np.float32)
+            for i in range(len(pi_all)):
+                if pi_all[i] is None:
+                    pi_all[i] = OrnsteinUhlenbeckAction(action_space, 0.025)
+
+            # Check for generate gif request
+            gif_idx = -1
+            with gif_req_m.get_lock():
+                if gif_req_m.value != -1:
+                    gif_idx = gif_req_m.value
+                    gif_req_m.value = -1
+            if gif_idx != -1:
+                pi_aux = copy.deepcopy(pi)
+                path = os.path.join(hp.GIF_PATH, f"{gif_idx:09d}.gif")
+                generate_gif_3v3(env=env, filepath=path,
+                             pi=[pi_aux] + pi_allies[1:] + pi_enemy, hp=hp)
+
+            done = False
+            s = env.reset()
+            noise.reset()
+            if hp.MULTI_AGENT:
+                [tracer[i].reset() for i in range(hp.N_AGENTS)]
+            else:
+                tracer.reset()
+            noise.sigma = sigma_m.value
+            info = {}
+            ep_steps = 0
+            if hp.MULTI_AGENT:
+                ep_rw = [0]*hp.N_AGENTS
+            else:
+                ep_rw = 0
+            st_time = time.perf_counter()
+
             for i in range(hp.MAX_EPISODE_STEPS):
                 # Step the environment
                 actions = []
-
+                
                 for idx, st in enumerate(s):
-                    s_v = torch.Tensor(st).to(device)
-                    if pi_all[idx] is None:
-                        action_space = gym.spaces.Box(low=-1, high=1,
-                                           shape=(2, ), dtype=np.float32)
-                        a = OrnsteinUhlenbeckAction(action_space, 0.025).sample()
+                    if isinstance(pi_all[idx], OrnsteinUhlenbeckAction):
+                        a = pi_all[idx].sample()
                     else: 
+                        s_v = torch.Tensor(st).to(device)
                         a_v = pi_all[idx](s_v)
                         a = a_v.cpu().numpy()
 
