@@ -37,7 +37,7 @@ if __name__ == "__main__":
     parser.add_argument("-p_gk", "--path_gk", default="./models/goalkeepers",
                         required=False,help="path of goalkeepers to be used in the evaluation")
     parser.add_argument("-p_atk", "--path_atk", default="./models/attackers",
-                        required=False,help="path of goalkeepers to be used in the evaluation")
+                        required=False,help="path of attacker to be used in the evaluation")
     args = parser.parse_args()
     device = "cuda" if args.cuda else "cpu"
 
@@ -100,8 +100,12 @@ if __name__ == "__main__":
 
     pi_gks = []
     for ck_gk in checkpoint_gks:
-        pi_gks.append(DDPGActor(ck_gk['N_OBS'], ck_gk['N_ACTS']).to(device))
-        pi_gks[-1].load_state_dict(ck_gk['pi_state_dict'])
+        if 'state_dict_act' in ck_gk:
+            pi_gks.append(DDPGActor(40, 2).to(device))
+            pi_gks[-1].load_state_dict(ck_gk['state_dict_act'])
+        else:
+            pi_gks.append(DDPGActor(ck_gk['N_OBS'], ck_gk['N_ACTS']).to(device))
+            pi_gks[-1].load_state_dict(ck_gk['pi_state_dict'])
         pi_gks[-1].eval()
 
     # Lendo a politica a ser avaliada treinado
@@ -266,8 +270,7 @@ if __name__ == "__main__":
                     pi=pi,
                     Q=Q,
                     pi_opt=pi_opt,
-                    Q_opt=Q_opt,
-                    label="eval"
+                    Q_opt=Q_opt
                 )
 
             if hp.GIF_FREQUENCY and n_grads % hp.GIF_FREQUENCY == 0:
