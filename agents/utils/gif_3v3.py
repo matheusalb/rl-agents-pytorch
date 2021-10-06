@@ -34,10 +34,8 @@ def generate_gif_3v3(
     for t in range(max_episode_steps):
         actions = []
         for p, obs in zip(pi, s):
-            if p is None:
-                action_space = gym.spaces.Box(low=-1, high=1,
-                                           shape=(2, ), dtype=np.float32)
-                a = OrnsteinUhlenbeckAction(action_space, 0.025).sample()
+            if isinstance(p, OrnsteinUhlenbeckAction):
+                a = p.sample()
             else:
                 s_v = torch.Tensor(obs).to(hp.DEVICE)
                 a = p.get_action(s_v)
