@@ -59,7 +59,8 @@ def data_func(
 
             for indx, atck_id in enumerate(ids_pi_enemy_atks):
                 pi_enemy[indx] = pi_atks[atck_id]
-            pi_enemy[-1] = pi_enemy_gk
+            if n_enemy_gk == 1:
+                pi_enemy[-1] = pi_enemy_gk
             random.shuffle(pi_enemy)
             
             # select ally team
@@ -90,7 +91,7 @@ def data_func(
                 pi_aux = copy.deepcopy(pi)
                 path = os.path.join(hp.GIF_PATH, f"{gif_idx:09d}.gif")
                 generate_gif_3v3(env=env, filepath=path,
-                             pi=[pi_aux] + pi_allies[1:] + pi_enemy, hp=hp)
+                             pi=[pi_aux] + pi_all[1:], hp=hp)
 
             done = False
             s = env.reset()
