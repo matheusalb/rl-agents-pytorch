@@ -34,9 +34,9 @@ if __name__ == "__main__":
                         help="Name of the gym environment")
     parser.add_argument("-c", "--checkpoint", default=None, required=False,
                         help="checkpoint to load the goalkeeper to be trained")
-    parser.add_argument("-p_gk", "--path_gk", default="./models/goalkeepers",
+    parser.add_argument("-p_gk", "--path_gk", default="/content/rl-agents-pytorch/models/goalkeepers",
                         required=False,help="path of goalkeepers to be used in the evaluation")
-    parser.add_argument("-p_atk", "--path_atk", default="./models/attackers",
+    parser.add_argument("-p_atk", "--path_atk", default="/content/rl-agents-pytorch/models/attackers",
                         required=False,help="path of attacker to be used in the evaluation")
     args = parser.parse_args()
     device = "cuda" if args.cuda else "cpu"
@@ -46,7 +46,7 @@ if __name__ == "__main__":
         EXP_NAME=args.name,
         DEVICE=device,
         ENV_NAME=args.env,
-        N_ROLLOUT_PROCESSES=2,
+        N_ROLLOUT_PROCESSES=4,
         LEARNING_RATE=0.0001,
         EXP_GRAD_RATIO=10,
         BATCH_SIZE=256,
@@ -144,6 +144,7 @@ if __name__ == "__main__":
         data_proc_list.append(data_proc)
 
     # Training
+    print("start to training")
     tgt_pi = TargetActor(pi)
     tgt_Q = TargetCritic(Q)
     
@@ -163,6 +164,7 @@ if __name__ == "__main__":
 
     try:
         while n_grads < hp.TOTAL_GRAD_STEPS:
+            print(n_grads)
             metrics = {}
             ep_infos = list()
             st_time = time.perf_counter()
