@@ -24,7 +24,7 @@ if __name__ == "__main__":
     pyvirtualdisplay.Display(visible=0, size=(1400, 900)).start()
 
     mp.set_start_method('spawn')
-    os.environ['OMP_NUM_THREADS'] = "1"
+    os.environ['OMP_NUM_THREADS'] = "3"
     parser = argparse.ArgumentParser()
     parser.add_argument("--cuda", default=False,
                         action="store_true", help="Enable cuda")
@@ -57,7 +57,7 @@ if __name__ == "__main__":
         NOISE_SIGMA_DECAY=0.997,
         NOISE_SIGMA_MIN=0.15,
         NOISE_SIGMA_GRAD_STEPS=3000,
-        REPLAY_SIZE=1000000,
+        REPLAY_SIZE=5000000,
         REPLAY_INITIAL=200000,
         SAVE_FREQUENCY=100000,
         GIF_FREQUENCY=25000,
@@ -164,7 +164,8 @@ if __name__ == "__main__":
 
     try:
         while n_grads < hp.TOTAL_GRAD_STEPS:
-            print(n_grads)
+            if(buffer.size()%10000 == 0):
+              print(buffer.size())
             metrics = {}
             ep_infos = list()
             st_time = time.perf_counter()
